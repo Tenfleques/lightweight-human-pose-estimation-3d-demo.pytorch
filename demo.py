@@ -85,6 +85,7 @@ if __name__ == '__main__':
     p_code = 112
     space_code = 32
     mean_time = 0
+    i = 0
     for frame in frame_provider:
         current_time = cv2.getTickCount()
         if frame is None:
@@ -120,6 +121,8 @@ if __name__ == '__main__':
         cv2.putText(frame, 'FPS: {}'.format(int(1 / mean_time * 10) / 10),
                     (40, 80), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
         cv2.imshow('ICV 3D Human Pose Estimation', frame)
+        # cv2.imwrite("./data/frame-{}.png".format(i), frame)
+        i += 1
 
         key = cv2.waitKey(delay)
         if key == esc_code:
