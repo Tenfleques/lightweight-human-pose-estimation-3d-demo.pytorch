@@ -86,10 +86,24 @@ if __name__ == '__main__':
     space_code = 32
     mean_time = 0
     i = 0
+    frame_size = None, None
+    
+    dir_name = "./data/"
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = None
+    out_3d = None
+    
     for frame in frame_provider:
         current_time = cv2.getTickCount()
         if frame is None:
             break
+        
+        if any(frame_size) is None:
+                frame_size = tuple(int(i) for i in frame.shape[:2:-1])
+                out_3d = cv2.VideoWriter(os.path.join(dir_name,'output-3d.mp4'),fourcc, 20.0, frame_size, True)
+                out = cv2.VideoWriter(os.path.join(dir_name,'output.mp4'),fourcc, 20.0, frame_size, True)
+
+            
         input_scale = base_height / frame.shape[0]
         scaled_img = cv2.resize(frame, dsize=None, fx=input_scale, fy=input_scale)
         scaled_img = scaled_img[:, 0:scaled_img.shape[1] - (scaled_img.shape[1] % stride)]  # better to pad, but cut out for demo
@@ -110,7 +124,11 @@ if __name__ == '__main__':
             poses_3d = poses_3d.reshape(poses_3d.shape[0], 19, -1)[:, :, 0:3]
             edges = (Plotter3d.SKELETON_EDGES + 19 * np.arange(poses_3d.shape[0]).reshape((-1, 1, 1))).reshape((-1, 2))
         plotter.plot(canvas_3d, poses_3d, edges)
-        cv2.imshow(canvas_3d_window_name, canvas_3d)
+        
+#        cv2.imshow(canvas_3d_window_name, canvas_3d)
+
+        if out_3d is not None:
+            out_3d.write(canvas_3d)
 
         draw_poses(frame, poses_2d)
         current_time = (cv2.getTickCount() - current_time) / cv2.getTickFrequency()
@@ -120,27 +138,37 @@ if __name__ == '__main__':
             mean_time = mean_time * 0.95 + current_time * 0.05
         cv2.putText(frame, 'FPS: {}'.format(int(1 / mean_time * 10) / 10),
                     (40, 80), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
-        cv2.imshow('ICV 3D Human Pose Estimation', frame)
+#        cv2.imshow('ICV 3D Human Pose Estimation', frame)
         # cv2.imwrite("./data/frame-{}.png".format(i), frame)
         i += 1
+        if out is not None:
+            out.write(frame)
 
-        key = cv2.waitKey(delay)
-        if key == esc_code:
-            break
-        if key == p_code:
-            if delay == 1:
-                delay = 0
-            else:
-                delay = 1
-        if delay == 0 or not is_video:  # allow to rotate 3D canvas while on pause
-            key = 0
-            while (key != p_code
-                   and key != esc_code
-                   and key != space_code):
-                plotter.plot(canvas_3d, poses_3d, edges)
-                cv2.imshow(canvas_3d_window_name, canvas_3d)
-                key = cv2.waitKey(33)
-            if key == esc_code:
-                break
-            else:
-                delay = 1
+#        key = cv2.waitKey(delay)
+#        if key == esc_code:
+#            break
+#        if key == p_code:
+#            if delay == 1:
+#                delay = 0
+#            else:
+#                delay = 1
+#        if delay == 0 or not is_video:  # allow to rotate 3D canvas while on pause
+#            key = 0
+#            while (key != p_code
+#                   and key != esc_code
+#                   and key != space_code):
+#                plotter.plot(canvas_3d, poses_3d, edges)
+#                cv2.imshow(canvas_3d_window_name, canvas_3d)
+#                key = cv2.waitKey(33)
+#            if key == esc_code:
+#                break
+#            else:
+#                delay = 1
+        
+        if out is not None:
+            out.release()
+
+        if out_3d is not None:
+            out_3d.release()
+
+        print("[INFO] finished ....")
