@@ -165,10 +165,10 @@ if __name__ == '__main__':
 #            else:
 #                delay = 1
         
-        if out is not None:
-            out.release()
+    if out is not None:
+        out.release()
 
-        if out_3d is not None:
-            out_3d.release()
+    if out_3d is not None:
+        out_3d.release()
 
-        print("[INFO] finished ....")
+    print("[INFO] finished ....")
