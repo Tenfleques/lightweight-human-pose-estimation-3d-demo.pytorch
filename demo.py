@@ -61,10 +61,11 @@ if __name__ == '__main__':
     canvas_3d = np.zeros((720, 1280, 3), dtype=np.uint8)
     plotter = Plotter3d(canvas_3d.shape[:2])
     canvas_3d_window_name = 'Canvas 3D'
-    cv2.namedWindow(canvas_3d_window_name)
-    cv2.setMouseCallback(canvas_3d_window_name, Plotter3d.mouse_callback)
+#    cv2.namedWindow(canvas_3d_window_name)
+#    cv2.setMouseCallback(canvas_3d_window_name, Plotter3d.mouse_callback)
 
     file_path = args.extrinsics_path
+    
     if file_path is None:
         file_path = os.path.join('data', 'extrinsics.json')
     with open(file_path, 'r') as f:
@@ -74,101 +75,117 @@ if __name__ == '__main__':
 
     frame_provider = ImageReader(args.images)
     is_video = False
+    outname = "output"
     if args.video != '':
         frame_provider = VideoReader(args.video)
         is_video = True
+        try:
+            is_cam = int(args.video)
+        except:
+            outname = ".".join(args.video.split(os.sep)[-1].split(".")[:-1])
+        
     base_height = args.height_size
     fx = args.fx
 
-    delay = 1
-    esc_code = 27
-    p_code = 112
-    space_code = 32
     mean_time = 0
     i = 0
     frame_size = None, None
     
-    dir_name = "./data/"
+    dir_name = "./output/"
+    outname_3d = os.path.join(dir_name, "{}-temp-3D.mp4".format(outname))
+    outname_frames = os.path.join(dir_name, "{}-temp.mp4".format(outname))
+
+    outname_3d_compressed = os.path.join(dir_name, "{}-3D.mp4".format(outname))
+    outname_frames_compressed = os.path.join(dir_name, "{}.mp4".format(outname))
+
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     out = None
     out_3d = None
+    fps = None
+    fps_out = 15
     
-    for frame in frame_provider:
-        current_time = cv2.getTickCount()
-        if frame is None:
-            break
-        
-        if any(frame_size) is None:
-                frame_size = tuple(int(i) for i in frame.shape[:2:-1])
-                out_3d = cv2.VideoWriter(os.path.join(dir_name,'output-3d.mp4'),fourcc, 20.0, frame_size, True)
-                out = cv2.VideoWriter(os.path.join(dir_name,'output.mp4'),fourcc, 20.0, frame_size, True)
+    try:
+        for frame in frame_provider:
+            current_time = cv2.getTickCount()
+            if frame is None:
+                break
 
+                
+            input_scale = base_height / frame.shape[0]
             
-        input_scale = base_height / frame.shape[0]
-        scaled_img = cv2.resize(frame, dsize=None, fx=input_scale, fy=input_scale)
-        scaled_img = scaled_img[:, 0:scaled_img.shape[1] - (scaled_img.shape[1] % stride)]  # better to pad, but cut out for demo
-        if fx < 0:  # Focal length is unknown
-            fx = np.float32(0.8 * frame.shape[1])
+            scaled_img = cv2.resize(frame, dsize=None, fx=input_scale, fy=input_scale)
 
-        inference_result = net.infer(scaled_img)
-        poses_3d, poses_2d = parse_poses(inference_result, input_scale, stride, fx, is_video)
-        edges = []
-        if len(poses_3d):
-            poses_3d = rotate_poses(poses_3d, R, t)
-            poses_3d_copy = poses_3d.copy()
-            x = poses_3d_copy[:, 0::4]
-            y = poses_3d_copy[:, 1::4]
-            z = poses_3d_copy[:, 2::4]
-            poses_3d[:, 0::4], poses_3d[:, 1::4], poses_3d[:, 2::4] = -z, x, -y
+            scaled_img = scaled_img[:, 0:scaled_img.shape[1] - (scaled_img.shape[1] % stride)]  # better to pad, but cut out for demo
+            if fx < 0:  # Focal length is unknown
+                fx = np.float32(0.8 * frame.shape[1])
 
-            poses_3d = poses_3d.reshape(poses_3d.shape[0], 19, -1)[:, :, 0:3]
-            edges = (Plotter3d.SKELETON_EDGES + 19 * np.arange(poses_3d.shape[0]).reshape((-1, 1, 1))).reshape((-1, 2))
-        plotter.plot(canvas_3d, poses_3d, edges)
-        
-#        cv2.imshow(canvas_3d_window_name, canvas_3d)
+            inference_result = net.infer(scaled_img)
+            
+            
+            poses_3d, poses_2d = parse_poses(inference_result, input_scale, stride, fx, is_video)
+            edges = []
+            if len(poses_3d):
+                poses_3d = rotate_poses(poses_3d, R, t)
+                poses_3d_copy = poses_3d.copy()
+                x = poses_3d_copy[:, 0::4]
+                y = poses_3d_copy[:, 1::4]
+                z = poses_3d_copy[:, 2::4]
+                poses_3d[:, 0::4], poses_3d[:, 1::4], poses_3d[:, 2::4] = -z, x, -y
 
-        if out_3d is not None:
-            out_3d.write(canvas_3d)
+                poses_3d = poses_3d.reshape(poses_3d.shape[0], 19, -1)[:, :, 0:3]
+                edges = (Plotter3d.SKELETON_EDGES + 19 * np.arange(poses_3d.shape[0]).reshape((-1, 1, 1))).reshape((-1, 2))
+            plotter.plot(canvas_3d, poses_3d, edges)
 
-        draw_poses(frame, poses_2d)
-        current_time = (cv2.getTickCount() - current_time) / cv2.getTickFrequency()
-        if mean_time == 0:
-            mean_time = current_time
-        else:
-            mean_time = mean_time * 0.95 + current_time * 0.05
-        cv2.putText(frame, 'FPS: {}'.format(int(1 / mean_time * 10) / 10),
-                    (40, 80), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
-#        cv2.imshow('ICV 3D Human Pose Estimation', frame)
-        # cv2.imwrite("./data/frame-{}.png".format(i), frame)
-        i += 1
-        if out is not None:
-            out.write(frame)
+            draw_poses(frame, poses_2d)
+            
+            current_time = (cv2.getTickCount() - current_time) / cv2.getTickFrequency()
+            if mean_time == 0:
+                mean_time = current_time
+            else:
+                mean_time = mean_time * 0.95 + current_time * 0.05
+            
+            fps = int(1 / mean_time * 10) / 10
+            
+            cv2.putText(frame, 'processing FPS: {}'.format(fps),
+                        (40, 80), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255))
+#            cv2.imshow('ICV 3D Human Pose Estimation', frame)
+            # cv2.imwrite("./data/frame-{}.png".format(i), frame)
+            i += 1
+            
+#            print("[INFO] done with frame {}".format(i))
+            
+            
+            if out is None or out_3d is None:
+                frame_size = tuple(int(i) for i in frame.shape[:2])
+                frame_size = frame_size[::-1]
+                
+                frame_size_3d = tuple(int(i) for i in canvas_3d.shape)
+                frame_size_3d = canvas_3d.shape[1::-1]
+                
+                print(frame_size_3d, frame_size)
+                out_3d = cv2.VideoWriter(outname_3d,fourcc, fps_out, frame_size_3d, True)
+                out = cv2.VideoWriter(outname_frames,fourcc, fps_out, frame_size, True)
+            
+            if out is not None:
+                out.write(frame)
+            
+#            cv2.imshow(canvas_3d_window_name, canvas_3d)
 
-#        key = cv2.waitKey(delay)
-#        if key == esc_code:
-#            break
-#        if key == p_code:
-#            if delay == 1:
-#                delay = 0
-#            else:
-#                delay = 1
-#        if delay == 0 or not is_video:  # allow to rotate 3D canvas while on pause
-#            key = 0
-#            while (key != p_code
-#                   and key != esc_code
-#                   and key != space_code):
-#                plotter.plot(canvas_3d, poses_3d, edges)
-#                cv2.imshow(canvas_3d_window_name, canvas_3d)
-#                key = cv2.waitKey(33)
-#            if key == esc_code:
-#                break
-#            else:
-#                delay = 1
+            if out_3d is not None:
+                out_3d.write(canvas_3d)
+     
+    except KeyboardInterrupt:
+        print("[INFO] interrupted")
         
     if out is not None:
         out.release()
 
     if out_3d is not None:
         out_3d.release()
+
+    os.system(f"ffmpeg -i {outname_frames} -loglevel error -vcodec libx264 {outname_frames_compressed}")
+    os.system(f"ffmpeg -i {outname_3d} -loglevel error -vcodec libx264 {outname_3d_compressed}")
+
+    os.system(f"rm -rf {outname_frames} {outname_3d}")
 
     print("[INFO] finished ....")

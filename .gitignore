@@ -2,6 +2,7 @@
 __pycache__
 .idea/
 *.bin
+output
 *.onnx
 build
 *.pth

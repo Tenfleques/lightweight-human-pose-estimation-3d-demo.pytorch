@@ -1,8 +1,20 @@
-pip3 install -r requirements.txt 
-python3 setup.py build_ext
+env_dir=~/pyenv/ssmp3d-pose
+
+if [ -f $env_dir ]
+    then
+        echo "exist"
+    else
+        echo "not exist"
+        # virtualenv $env_dir
+fi
+
+source $env_dir/bin/activate
+ 
+# pip3 install -r requirements.txt 
+# python3 setup.py build_ext
 export PYTHONPATH=pose_extractor/build/:$PYTHONPATH
-python demo.py --model human-pose-estimation-3d.pth --video 0
-# python3 demo.py --model ~/dev/models/human-pose-estimation-3d.pth --video 0
+python infer_ctrl.py --model human-pose-estimation-3d.pth --video ./data/test_video.mp4
+
 # source /opt/intel/openvino_2021/bin/setupvars.sh
 # python3 scripts/convert_to_op --checkpoint-path ~/dev/models/human-pose-estimation-3d.pth 
 # pip3 install networkx
